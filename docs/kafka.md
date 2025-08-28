@@ -1,0 +1,178 @@
+## Introduction to Kafka
+
+Kafka is a distributed event streaming platform capable of handling trillions of events a day. 
+It is designed to be fast, scalable, and durable, making it suitable for real-time data processing.
+
+## Key Concepts
+
+- **Producer**: An application that sends messages to Kafka topics.
+- **Consumer**: An application that reads messages from Kafka topics.
+- **Topic**: 
+  - A category or feed name to which messages are published. Topics are partitioned and replicated across the Kafka cluster.
+  - New topic created can be configured with various settings:
+    - number of partitions: Determines how many partitions the topic will have. More partitions allow for greater parallelism and throughput.
+    - number of replicas: Determines how many copies of each partition will be maintained across the Kafka cluster. This is important for fault tolerance and high availability.
+    - retention period: Determines how long messages will be retained in the topic before being deleted. This can be based on time (e.g., 7 days) or size (e.g., 100 GB).
+  - Leader and Follower:
+    - Each partition has one leader and multiple followers.
+    - The leader handles all reads and writes for the partition, while followers replicate the data from the leader.
+    - If the leader fails, one of the followers will be elected as the new leader to ensure high availability.
+- **Partition**: 
+  - Is where the message lives inside the topic.
+  - Each partition is an ordered, immutable sequence of records that is continually appended to.
+  - Each topic can have multiple partitions, allowing for parallel processing and scalability.
+  - Each partition is independent of each other, meaning that messages in one partition do not affect messages in another partition.
+  - Ordering is guaranteed only at the partition level, not across partitions.
+  - Each record is assigned a sequential number called **offset**
+  - Partition continuously grows as new records are produced, and old records can be removed based on **retention** policies.
+  - All the records are persisted in a commit log in the file system where Kafka is installed.
+  - Produce a message with key, Kafka will hash the key and determine which partition to send the message to. This ensures that messages with the same key are always sent to the same partition, maintaining order for those messages.
+- **Offset**: 
+  - A unique identifier for each message within a partition. It is used to track the position of a consumer in a partition.
+  - Have three options to read messages / initial offset for New Consumer Groups:
+    - **from-beginning**: Start reading from the beginning of the partition.
+    - **latest**: Start reading from the end of the partition, ignoring any existing messages.
+    - **specific offset**: Start reading from a specific offset in the partition.
+  - Current offset is stored in a special topic called `__consumer_offsets`.
+  - Consumers can commit their offsets to Kafka, allowing them to resume reading from the last committed offset in case of failures or restarts.
+- **Consumer Group**:
+  - A group of consumers that work together to consume messages from a topic. Each message is delivered to one consumer in the group.
+  - **group.id**: is mandatory and is used to identify the consumer group. Plays a crucial role when it comes to scalable message consumption.
+  - If a consumer is part of a group, it will not receive messages that are consumed by other consumers in the same group.
+  - Consumer groups allow for parallel processing of messages, as each consumer in the group can read from different partitions of the same topic.
+  - Each consumer in a group is assigned one or more partitions, ensuring that each partition is consumed by only one consumer in the group at a time.
+  - If a consumer fails or is removed from the group, Kafka will automatically reassign its partitions to other consumers in the group, ensuring that no messages are lost and processing continues.
+  - Different consumer groups can read the same messages independently, allowing for multiple applications to consume the same data without interfering with each other.
+  - Each different application will have its own consumer group, allowing them to consume the same messages independently.
+  - Kafka Broker manages the consumer group state, including tracking offsets and partition assignments, acts as a Group-ordinator.
+- **Commit Log**:
+  - A persistent log where Kafka stores messages in the order they are produced.
+  - Each partition is stored as a separate log file, and messages are appended to the end of the log.
+  - The commit log allows Kafka to provide durability and fault tolerance, as messages can be replayed from the log in case of failures.
+  - The commit log is also used for replication, as followers read from the leader's commit log to replicate messages.
+- **Retention Policy**: 
+  - The duration for which Kafka retains messages in a topic. Messages can be retained based on time or size limits.
+  - Configured using the property `log.retention.hours` (for time-based retention) or `log.retention.bytes` (for size-based retention) in `server.properties`.
+  - Default retention period is 168 hours (7 days).
+- **Apache Kafka is a distributed streaming platform**
+  - Distributed system are a collection of systems working together to deliver a value.
+  - Characteristics of distributed systems:
+    - Availability and Fault Tolerance: The system should be able to continue functioning even if some components fail.
+    - Reliable Work Distribution: The system should be able to distribute work across multiple systems in a reliable manner.
+    - Easily Scalable: The system should be able to scale up or down easily to handle changes in workload.
+    - Handling Concurrency is fairly easy: The system should be able to handle multiple concurrent requests without issues.
+  - A broker is a Kafka server that stores data and serves client requests. Only one broker is needed to run Kafka, but a cluster of multiple brokers is recommended for production use.
+  - Kafka cluster consists of multiple brokers, which work together to provide high availability and fault tolerance (Managed by Zookeeper).
+  - Kafka uses Zookeeper to manage the cluster metadata, including broker information, topic configurations, and consumer group offsets.
+  - All the brokers send heartbeats to Zookeeper to indicate that they are alive and functioning properly.
+  - The client requests are load balanced across the brokers in the cluster.
+  - If a broker fails, Zookeeper will detect the failure and notify the other brokers in the cluster. And all the client requests will be redirected to the remaining brokers.
+  - Kafka uses replication to ensure that data is not lost in case of broker failures. Each partition can be replicated across multiple brokers, with one broker acting as the leader and the others as followers.
+  - If the leader broker fails, one of the followers will be elected as the new leader to ensure that data remains available.
+  - Kafka provides strong durability guarantees, ensuring that messages are not lost even in the event of broker failures. Messages are written to disk and replicated across multiple brokers to ensure that they are not lost.
+  - Kafka is designed to be highly scalable, allowing for easy addition of new brokers to the cluster as needed.
+- **How Kafka Distributes the Client Requests between the Brokers? - Leader/Follower**
+  - Out of all the brokers in the cluster, one broker is elected as the controller. Normally, this is the first broker that starts up in the cluster.
+  - When the creation topic is issued to the Zookeeper, the zookeeper will forward the request to the controller broker.
+  - The controller broker is responsible for creating the topic and assigning partitions to brokers in the cluster. Number of partitions and replicas are specified during topic creation (Example: ./kafka-topics.sh --create --topic test-topic-replicated-zookeeper localhost:2181 --replication-factor 3 --partitions 3).
+  - The controller broker uses a partition assignment strategy (e.g., round-robin, range) to distribute partitions evenly across the brokers in the cluster.
+  - This concept of distributing partitions to the brokers is called **leader assignment**. Each partition will have one leader broker and multiple follower brokers (Example: Broker1 is leader for Partition 0, Broker-2 is leader for Partition 1, Broker3 is leader for Partition 2).
+  - **Partition leaders are assigned during topic Creation and can be re-assigned if a broker fails or is added to the cluster.**
+  - Once the topic is created and partitions are assigned, the controller broker updates the cluster metadata in Zookeeper to reflect the new topic and partition assignments.
+  - All the brokers in the cluster periodically fetch the latest metadata from Zookeeper to ensure that they have the most up-to-date information about topics and partitions.
+  - When a producer sends a message to a topic, it first contacts the Kafka broker to get metadata about the topic, including the number of partitions and their leaders.
+  - The producer then uses a partitioning strategy (e.g., round-robin, key-based) to determine which partition to send the message to.
+  - The producer sends the message directly to the leader broker for the chosen partition.
+  - The leader broker appends the message to its commit log and replicates it to its followers.
+  - When a consumer wants to read messages from a topic, it first contacts the Kafka broker to get metadata about the topic, including the number of partitions and their leaders.
+  - The consumer then joins a consumer group and is assigned one or more partitions to read from.
+  - The consumer sends fetch requests directly to the leader brokers for its assigned partitions.
+  - The leader brokers return the requested messages to the consumer, which processes them and commits its offsets as needed.
+  - Kafka's architecture allows for high throughput and low latency, as producers and consumers can communicate directly with brokers without going through a central coordinator.
+  - **Clients will only invoke leader of the partition (not the followers) to produce or consume messages. Load is evenly distributed between the brokers**.
+- **How Kafka handles Data Loss? - Replication and In-Sync Replicas (ISR)**
+  - Kafka uses replication to ensure that data is not lost in case of broker failures. Number of replicas is specified during topic creation (Example: ./kafka-topics.sh --create --topic test-topic-replicated-zookeeper localhost:2181 --replication-factor 3 --partitions 3).
+  - After the message is received by the leader broker, the message is persisted into the file system of the leader broker. Each broker has its own local storage (disk) where it stores the messages.
+  - The leader broker then replicates the message to its follower brokers. Each partition can be replicated across multiple brokers, with one broker acting as the leader and the others as followers.
+  - Each partition can be replicated across multiple brokers, with one broker acting as the leader (leader replica) and the others as followers (follower replica).
+  - If replication factor is 3, then there will be 1 leader and 2 followers for each partition.
+  - If one broker fails, Zookeeper gets notified about the failure, and it assigns the new leader to the controller.
+  - The leader broker is responsible for handling all reads and writes for the partition, while followers replicate the data from the leader.
+  - Kafka uses a concept called In-Sync Replicas (ISR) to ensure that data is not lost in case of broker failures. ISR is a set of replicas that are fully caught up with the leader and are eligible to become the new leader if the current leader fails. ISR represents the number of replica in sync with each other in the cluster including both **leader** and **follower** replica.
+  - ISR recommended value is always greater than 1 (i.e., at least one follower replica) to ensure that there is always a backup in case the leader fails. Ideal value is equal to the replication factor (ISR == Replication Factor).
+  - ISR can be controlled using the following properties in `server.properties` (it can be set at the broker level or topic level):
+    - `min.insync.replicas`: The minimum number of replicas that must acknowledge a write for it to be considered successful. Default is 1.
+    - `unclean.leader.election.enable`: If set to true, allows a follower that is not in the ISR to become the leader if all ISR replicas are unavailable. Default is false.
+  - If `min.insync.replicas` is set to 2 and the replication factor is 3, then at least 2 replicas (including the leader) must acknowledge a write for it to be considered successful.
+  - If number of brokers in the ISR falls below `min.insync.replicas`, then the producer will receive an exception when trying to write to the topic.
+  - This ensures that data is not lost in case of broker failures, as there are always enough replicas in sync to handle writes.
+  - If `unclean.leader.election.enable` is set to false, then only replicas in the ISR can become the leader. This ensures that data is not lost, but may result in longer downtime if all ISR replicas are unavailable.
+  - If `unclean.leader.election.enable` is set to true, then a follower that is not in the ISR can become the leader if all ISR replicas are unavailable. This may result in data loss, but ensures that the partition remains available.
+  - The choice between setting `unclean.leader.election.enable` to true or false depends on the specific use case and the trade-off between availability and data durability.
+  - Producers can specify the acknowledgment level (acks) to determine how many replicas must acknowledge the write before considering it successful.
+  - The acknowledgment level can be controlled using the `acks` property in the producer configuration.
+  - When a producer sends a message to a topic, it can specify an acknowledgment level (acks) to determine how many replicas must acknowledge the write before considering it successful:
+    - acks=0: The producer does not wait for any acknowledgment from the broker. This provides the lowest latency but does not guarantee that the message was received.
+    - acks=1: The producer waits for an acknowledgment from the leader broker only. This provides a balance between latency and durability, as the message is guaranteed to be written to the leader's log.
+    - acks=all (or -1): The producer waits for acknowledgments from all in-sync replicas (ISR). This provides the highest level of durability, as the message is guaranteed to be written to all replicas in the ISR before being considered successful.
+  - If a follower falls behind the leader (e.g., due to network issues or high load), it may be removed from the ISR until it catches up. This ensures that only replicas that are fully caught up with the leader are eligible to become the new leader in case of failures.
+  - If the leader broker fails, one of the followers in the ISR will be elected as the new leader to ensure that data remains available. The new leader will take over handling reads and writes for the partition, and other followers will start replicating from the new leader.
+  - Kafka provides strong durability guarantees, ensuring that messages are not lost even in the event of broker failures. Messages are written to disk and replicated across multiple brokers to ensure that they are not lost.
+- **KafkaTemplate**: 
+  - A Spring abstraction that simplifies Kafka operations, providing convenient methods for sending and receiving messages.
+  - A class that's part of the Spring to produce messages to Kafka topics (similar to JdbcTemplate for JDBC operations).
+  - Provides methods like `send()`, `sendDefault()`, and `flush()` to interact with Kafka.
+  - Handles serialization, partitioning, and error handling internally, making it easier to work with Kafka in Spring applications.
+  - How KafkaTemplate.send() works behind the scenes:
+    - Any record that is sent to Kafka needs to be serialized into bytes. KafkaTemplate uses the configured `ProducerFactory` to create a Kafka producer instance.
+    - The `ProducerFactory` is responsible for creating and configuring the Kafka producer, including setting properties like bootstrap servers, key and value serializers, and other producer settings.
+    - When you call `kafkaTemplate.send(topic, key, value)`, it creates a `ProducerRecord` with the specified topic, key, and value.
+    - The `ProducerRecord` is then passed to the underlying Kafka producer, which handles serialization of the key and value using the configured serializers (e.g., StringSerializer, JsonSerializer).
+    - The producer uses a partitioning strategy (default is hash-based) to determine which partition to send the message to based on the key. If no key is provided, it uses a round-robin strategy to distribute messages evenly across partitions.
+    - After that it won't send the message immediately, instead it is added to an internal buffer, an in-memory buffer, managed by the Kafka Producer. The producer batches messages together to improve throughput and reduce network overhead.
+    - Messages are accumulated in the buffer and sent in batches to the Kafka brokers. This reduces the number of network requests and improves throughput by sending multiple messages in a single go.
+    - Each topic partition has its own buffer, and messages for different partitions are batched separately.
+    - The size of the buffer and the batch size can be configured using producer properties like `batch.size` (number of bytes) and `linger.ms` (milliseconds).
+    - We also can configure `buffer.memory` to control the total memory available to the producer for buffering.
+    - If the buffer is full, the producer will block further sends until space becomes available.
+    - If the buffer is not full, the producer will continue to accumulate messages until either the buffer is full or the `linger.ms` timeout is reached.
+    - The producer periodically flushes the buffer and sends the batched messages to the appropriate brokers.
+    - The records are sent to the Kafka topic once the buffer is full or when the `linger.ms` timeout is reached.
+    - KafkaTemplate.flush() can be called to forcefully flush the buffer and send any accumulated messages immediately.
+    - The producer sends the message to the leader broker for the chosen partition. The leader appends the message to its commit log and replicates it to its followers.
+    - Depending on the acknowledgment level (acks) configured in the producer properties, the producer waits for acknowledgments from the broker(s) before considering the send operation successful.
+    - If the send operation is successful, a `ListenableFuture` is returned, allowing you to add callbacks for success or failure handling.
+    - If there are any errors during serialization, partitioning, or sending, exceptions are thrown, which can be caught and handled appropriately.
+  - Configuring KafkaTemplate in Spring Boot:
+    - Add the necessary dependencies for Spring Kafka in your `build.gradle` or `pom.xml`.
+    - Configure the Kafka producer properties in `application.properties` or `application.yml`, including bootstrap servers (mandatory), key (mandatory) and value serializers (mandatory), and other producer settings:
+      ```properties
+      spring.kafka.bootstrap-servers=localhost:9092,localhost:9093,localhost:9094
+      spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.IntegerSerializer
+      spring.kafka.producer.value-serializer=org.apache.kafka.common.serialization.StringSerializer
+      spring.kafka.producer.acks=all
+      spring.kafka.producer.retries=3
+      spring.kafka.producer.batch-size=16384
+      spring.kafka.producer.linger-ms=1
+      spring.kafka.producer.buffer-memory=33554432
+      ```
+    - Define a `ProducerFactory` bean that creates and configures the Kafka producer.
+    - Define a `KafkaTemplate` bean that uses the `ProducerFactory` to create the template instance.
+    - Inject the `KafkaTemplate` into your service or component where you want to send messages to Kafka topics.
+    - Use the `send()` method of the `KafkaTemplate` to send messages to the desired topic, specifying the topic name, key, and value as needed.
+- **Broker**: A Kafka server that stores data and serves client requests. A Kafka cluster consists of multiple brokers.
+- **Zookeeper**: A centralized service for maintaining configuration information, naming, and providing distributed synchronization. Kafka uses Zookeeper to manage the cluster metadata.
+- **Replication**: The process of duplicating data across multiple brokers to ensure fault tolerance and high availability.
+- **Schema Registry**: A service that manages schemas for Kafka messages, ensuring data compatibility and evolution.
+- **Connectors**: Components that allow Kafka to connect with external systems, such as databases or message queues, for data ingestion and export.
+- **Streams**: A library for building applications that process data in real-time using Kafka topics as input and output streams.
+- **KSQL**: A SQL-like query language for Kafka Streams, allowing users to perform real-time data processing using familiar SQL syntax.
+- **Kafka Connect**: A framework for connecting Kafka with external systems, enabling data import and export without writing custom code.
+- **Kafka Streams**: A client library for building applications and microservices that process data stored in Kafka topics, providing features like windowing, aggregation, and joins.
+- **Kafka REST Proxy**: A RESTful interface for interacting with Kafka, allowing applications to produce and consume messages over HTTP.
+- **Kafka Security**: Features like SSL encryption, SASL authentication, and ACLs (Access Control Lists) to secure Kafka clusters and data.
+- **Kafka Monitoring**: Tools and metrics for monitoring the health and performance of Kafka clusters, such as JMX metrics, Kafka Manager, and third-party monitoring solutions.
+- **Kafka Streams API**: A powerful API for building real-time applications that process streams of data, allowing for complex event processing, stateful operations, and windowing.
+- **Kafka Connect API**: A framework for integrating Kafka with external systems, enabling data ingestion and export without writing custom code.
+- **Kafka MirrorMaker**: A tool for replicating data between Kafka clusters, useful for disaster recovery and data migration scenarios.
+- **KRaft (Kafka Raft)**: A new consensus protocol for Kafka that aims to replace Zookeeper for managing cluster metadata, providing improved scalability and simplicity.
